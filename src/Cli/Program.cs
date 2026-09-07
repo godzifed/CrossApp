@@ -3,7 +3,7 @@ using System.Text.Json;
 
 var appInfo = new
 {
-    Student = "Федун Тарас, група ФЕІ-26",
+    Student = "Федун Тарас, група ФЕІ-35",
     OSDescription = RuntimeInformation.OSDescription,
     OSEnvironment = Environment.OSVersion.ToString(),
     Architecture = RuntimeInformation.ProcessArchitecture.ToString(),
