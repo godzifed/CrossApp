@@ -10,7 +10,7 @@ dotnet build
 dotnet run --project src/Cli
 
 ## Середовище
-.NET SDK 10.0, [тут вкажи свою ОС, наприклад: Windows 11 x64]
+.NET SDK 10.0,  Windows 11 x64
 
 ## Додаткове завдання 1
 - Розмір папки publish для win-x64: 153 МБ
