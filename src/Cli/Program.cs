@@ -1,9 +1,10 @@
 ﻿using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Encodings.Web; 
 
 var appInfo = new
 {
-    Student = "Федун Тарас, група ФЕІ-35",
+    Student = "Федун Тарас, група ФЕІ-26",
     OSDescription = RuntimeInformation.OSDescription,
     OSEnvironment = Environment.OSVersion.ToString(),
     Architecture = RuntimeInformation.ProcessArchitecture.ToString(),
@@ -16,7 +17,14 @@ var appInfo = new
 
 if (args.Contains("--json"))
 {
-    Console.WriteLine(JsonSerializer.Serialize(appInfo));
+
+    var options = new JsonSerializerOptions
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+    
+    // Передаємо ці налаштування другим параметром
+    Console.WriteLine(JsonSerializer.Serialize(appInfo, options));
 }
 else
 {
