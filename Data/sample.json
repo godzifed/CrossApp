@@ -1,0 +1,8 @@
+[
+  { "id": "P-101", "sku": "SKU-101", "name": "Шуруповерт", "unit": "шт", "quantity": 15 },
+  { "id": "P-102", "sku": "SKU-102", "name": "Перфоратор", "unit": "шт", "quantity": 8 },
+  { "id": "P-103", "sku": "SKU-103", "name": "Болгарка", "unit": "шт", "quantity": 12 },
+  { "id": "P-104", "sku": "SKU-104", "name": "Диск відрізний", "unit": "шт", "quantity": 250 },
+  { "id": "P-105", "sku": "SKU-105", "name": "Рулетка 5м", "unit": "шт", "quantity": -5 },
+  { "id": "", "sku": "SKU-106", "name": "", "unit": "шт", "quantity": 10 }
+]

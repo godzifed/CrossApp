@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Core;
 
-// record відповідає за зберігання даних. Це тип посилання з рівністю за значенням.
+
 public sealed record EnvironmentReport(
     string OsDescription,
     string FrameworkDescription,
@@ -10,9 +10,9 @@ public sealed record EnvironmentReport(
     string DetectedRid,
     string ReportedRid,
     string BaseDirectory,
-    string BuildNote); // Додано для додаткового завдання
+    string BuildNote); 
 
-// static class відповідає за поведінку та алгоритми збору даних.
+
 public static class EnvironmentInfo
 {
     public static EnvironmentReport Collect() => new(
@@ -24,7 +24,7 @@ public static class EnvironmentInfo
         AppContext.BaseDirectory,
         GetBuildNote());
 
-    // Тернарний оператор (умова ? true : false) та switch вираз для визначення ОС і архітектури.
+  
     private static string DetectRid()
     {
         string os =
@@ -38,13 +38,13 @@ public static class EnvironmentInfo
             Architecture.X86 => "x86",
             Architecture.Arm64 => "arm64",
             Architecture.Arm => "arm",
-            _ => "unknown" // Гілка за замовчуванням (discard)
+            _ => "unknown" 
         };
 
         return $"{os}-{arch}";
     }
 
-    // Умовна компіляція для перевірки Multi-targeting (Додаткове завдання)
+    
     private static string GetBuildNote()
     {
 #if NET10_0_OR_GREATER
