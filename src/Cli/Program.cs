@@ -1,58 +1,33 @@
-﻿using Core.Dto;
-using Core.Import;
+﻿using Core.Domain;
 
-string path = args.Length > 0 ? args[0] : Path.Combine("data", "sample.csv");
+Console.WriteLine("=== Сценарій 1: успіх ===");
+Product product = Product.Create("P-001", "sku-001", "Цемент М400 25кг", "шт", 100);
+Console.WriteLine(product);
 
-if (!File.Exists(path))
-{
-    Console.WriteLine($"Файл не знайдено: {Path.GetFullPath(path)}");
-    return 1;
-}
+product.RegisterArrival(50);
+product.Issue(30);
+Console.WriteLine(product);
 
-string extension = Path.GetExtension(path).ToLowerInvariant();
+Console.WriteLine();
+Console.WriteLine("=== Сценарій 2: порушення інваріантів ===");
+TryDo("видача більша за залишок", () => product.Issue(1000));
+TryDo("порожній SKU", () => Product.Create("P-002", "", "Пісок", "т", 10));
+TryDo("від'ємний залишок", () => Product.Create("P-003", "SKU-003", "Цегла", "шт", -5));
 
-// Switch expression для вибору імпортера за розширенням файлу
-ImportResult<object> result = extension switch
-{
-    ".csv" => ProductCsvImporter.Load(path),
-    ".json" => ConvertJsonResult(ProductJsonImporter.Load(path)),
-    _ => new ImportResult<object>([], [$"Непідтримуване розширення файлу: '{extension}'"])
-};
-
-// Вивід перших записів
-Console.WriteLine($"Завантажено записів: {result.Items.Count}");
-foreach (object item in result.Items.Take(5))
-{
-    string line = item switch
-    {
-        ProductDto p => $"[Товар] {p.Id,-6} {p.Sku,-10} {p.Name,-26} {p.Quantity,5} {p.Unit}",
-        WarehouseDto w => $"[Склад] {w.Id,-6} {w.Name,-37} {w.Location}",
-        _ => item.ToString() ?? string.Empty
-    };
-    Console.WriteLine($"  {line}");
-}
-
-// Вивід списку помилок
-if (result.Errors.Count > 0)
-{
-    Console.WriteLine($"\nПропущено записів: {result.Errors.Count}");
-    foreach (string e in result.Errors)
-    {
-        Console.WriteLine($"  ! {e}");
-    }
-}
-
-// Додаткове завдання 3: Статистика імпорту одним рядком
-int accepted = result.Items.Count;
-int skipped = result.Errors.Count;
-int total = accepted + skipped;
-double errorPercent = total > 0 ? ((double)skipped / total) * 100 : 0;
-
-Console.WriteLine("\n------------------------------------------------------------");
-Console.WriteLine($"Статистика: Усього: {total} | Прийнято: {accepted} | Пропущено: {skipped} | Помилок: {errorPercent:F1}%");
-Console.WriteLine("------------------------------------------------------------");
+Console.WriteLine();
+Console.WriteLine($"Кінцевий стан об'єкта після спроб порушення: {product}");
 
 return 0;
 
-static ImportResult<object> ConvertJsonResult(ImportResult<ProductDto> jsonRes) =>
-    new(jsonRes.Items.Cast<object>().ToList(), jsonRes.Errors);
+static void TryDo(string title, Action action)
+{
+    try
+    {
+        action();
+        Console.WriteLine($"  [!] {title}: виняток НЕ спрацював — інваріант відсутній!");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"  {title}: {ex.GetType().Name} — {ex.Message}");
+    }
+}
