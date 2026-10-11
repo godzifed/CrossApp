@@ -14,6 +14,15 @@
 5. **Інваріант місткості (дві сутності):** Сумарна кількість товарів не може перевищувати ліміт місткості складу `Warehouse.MaxCapacity` (перевіряється в `WarehouseTransferService`, викликає `InvalidOperationException`).
 6. **Допустимість переходів станів:** Переміщення товару `StockMovement` дозволяє перехід з `Draft` у `Confirmed` або `Cancelled`, але забороняє зміну вже підтвердженого чи скасованого документа (`InvalidOperationException`).
 
+
+## Сервісний шар та сховища (Лабораторна робота 5)
+
+- **Контракт сховища:** `ICatalogStore`
+- **Реалізації:** `InMemoryCatalogStore` (у пам'яті), `FileCatalogStore` (JSON-файл `data/catalog.json`)
+- **Сервіс:** `CatalogService` (залежить виключно від `ICatalogStore`, ін'єкція через конструктор)
+- **Точка збірки (Composition Root):** `src/Cli/Program.cs` (перемикання прапорцем `--file`)
+
+
 ## Структура Solution
 Проєкт розділено на окрему бібліотеку логіки та точку входу:
 - src/Core (classlib): Бібліотека класів, що не має точки входу та компілюється в `.dll`. Містить збір інформації про середовище (`EnvironmentInfo`, `EnvironmentReport`). Підтримує multi-targeting (`net8.0;net10.0`).
