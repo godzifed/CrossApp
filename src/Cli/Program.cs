@@ -1,37 +1,21 @@
-﻿using Core.Abstractions;
-using Core.Services;
-using Core.Storage;
+﻿using Core.Domain;
 
-Console.WriteLine("============================================================");
-Console.WriteLine("                ЛАБОРАТОРНА РОБОТА №5                       ");
-Console.WriteLine("============================================================\n");
+Console.WriteLine("=== Сценарій 1: успіх ===");
+Product product = Product.Create("P-001", "sku-001", "Цемент М400 25кг", "шт", 100);
+Console.WriteLine(product);
 
-// 1. Створення сховища через фабрику (Додаткове завдання 3)
-string dataPath = Path.Combine(AppContext.BaseDirectory, "data", "catalog.json");
-ICatalogStore store = StoreFactory.Create(args, dataPath);
+product.RegisterArrival(50);
+product.Issue(30);
+Console.WriteLine(product);
 
-var service = new CatalogService(store);
+Console.WriteLine();
+Console.WriteLine("=== Сценарій 2: порушення інваріантів ===");
+TryDo("видача більша за залишок", () => product.Issue(1000));
+TryDo("порожній SKU", () => Product.Create("P-002", "", "Пісок", "т", 10));
+TryDo("від'ємний залишок", () => Product.Create("P-003", "SKU-003", "Цегла", "шт", -5));
 
-Console.WriteLine($"Обране сховище: {store.GetType().Name}\n");
-
-// 2. Демонстрація списку
-Console.WriteLine("--- Поточний список товарів ---");
-foreach (var p in service.All())
-{
-    Console.WriteLine($"  {p.Id,-8} {p.Sku,-10} {p.Name,-24} {p.Quantity,5} {p.Unit}");
-}
-
-// 3. Демонстрація пошуку за предикатом Func<Product, bool> (Додаткове завдання 2)
-Console.WriteLine("\n--- Пошук товарів із залишком > 40 (Func<Product, bool>) ---");
-var filtered = service.Search(p => p.Quantity > 40);
-foreach (var p in filtered)
-{
-    Console.WriteLine($"  [Знайдено] {p.Name,-24} | Залишок: {p.Quantity} {p.Unit}");
-}
-
-// 4. Сценарії відмови
-Console.WriteLine("\n--- Сценарії відмови ---");
-TryDo("Прихід для неіснуючого id", () => service.Receive("NON-EXISTENT-ID", 10));
+Console.WriteLine();
+Console.WriteLine($"Кінцевий стан об'єкта після спроб порушення: {product}");
 
 return 0;
 
@@ -40,10 +24,10 @@ static void TryDo(string title, Action action)
     try
     {
         action();
-        Console.WriteLine($"  [!] {title}: виняток НЕ спрацював!");
+        Console.WriteLine($"  [!] {title}: виняток НЕ спрацював — інваріант відсутній!");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"  [OK] {title}: {ex.GetType().Name} — {ex.Message}");
+        Console.WriteLine($"  {title}: {ex.GetType().Name} — {ex.Message}");
     }
 }
