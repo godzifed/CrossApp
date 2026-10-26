@@ -3,8 +3,7 @@ using Core.Abstractions;
 using Core.Events;
 using Core.Services;
 using Core.Storage;
-using System;
-using System.IO;
+
 
 Console.WriteLine("============================================================");
 Console.WriteLine("                ЛАБОРАТОРНА РОБОТА №6                       ");
