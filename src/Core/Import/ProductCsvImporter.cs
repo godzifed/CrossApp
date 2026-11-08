@@ -8,10 +8,10 @@ public static class ProductCsvImporter
 {
     private const char Separator = ';';
 
-    public static ImportResult<object> Load(string path)
+    // ЗМІНЕНО: Додано Action<string>? onWarning, і тепер повертаємо список лише успішних об'єктів
+    public static List<object> Load(string path, Action<string>? onWarning = null)
     {
         var items = new List<object>();
-        var errors = new List<string>();
 
         // Явно задаємо UTF-8 відповідно до вимог щодо кирилиці
         string[] lines = File.ReadAllLines(path, Encoding.UTF8);
@@ -35,12 +35,16 @@ public static class ProductCsvImporter
                     items.Add(ok.Value);
                     break;
                 case ParseFailed failed:
-                    errors.Add($"рядок {number}: {failed.Reason}");
+                    // ЗМІНЕНО: Замість додавання в список errors, викликаємо делегат
+                    onWarning?.Invoke($"рядок {number}: {failed.Reason}");
                     break;
             }
         }
 
-        return new ImportResult<object>(items, errors);
+        // ЗМІНЕНО: Оскільки помилки ми одразу відправляємо через Action, 
+        // метод може просто повертати список успішно завантажених елементів.
+        // (Або можете залишити повернення ImportResult, де errors буде порожнім).
+        return items; 
     }
 
     private static ParseOutcome ParseLine(string line)

@@ -13,6 +13,7 @@ public sealed class StockMovement
     public string ProductId { get; }
     public int Amount { get; }
     public MovementStatus Status { get; private set; }
+    public int Delta { get; set; }
 
     private StockMovement(string id, string productId, int amount)
     {

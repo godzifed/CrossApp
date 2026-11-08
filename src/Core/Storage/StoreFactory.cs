@@ -11,7 +11,7 @@ public static class StoreFactory
 
         ICatalogStore baseStore = useFile
             ? new FileCatalogStore(dataPath)
-            : new InMemoryCatalogStore(SampleData.Products());
+            : new InMemoryCatalogStore(SampleData.GetProducts());
 
         // Якщо передано прапорець --cache, огортаємо сховище в декоратор
         return useCache

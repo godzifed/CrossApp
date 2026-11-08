@@ -1,71 +1,91 @@
-﻿using Cli;
-using Core.Abstractions;
-using Core.Events;
-using Core.Services;
-using Core.Storage;
-
+﻿using System;
+using System.Linq;
+using System.Diagnostics;
+using System.Collections.Generic;
+using Core.Domain;
+using Core.Reports;
+using Core;
 
 Console.WriteLine("============================================================");
-Console.WriteLine("                ЛАБОРАТОРНА РОБОТА №6                       ");
+Console.WriteLine("                ЛАБОРАТОРНА РОБОТА №7                       ");
 Console.WriteLine("============================================================\n");
 
-string dataPath = Path.Combine(AppContext.BaseDirectory, "data", "catalog.json");
-var logPath = Path.Combine(AppContext.BaseDirectory, "logs", "app.log");
+// Отримуємо розширений набір даних
+var items = SampleData.GetProducts().ToList();
 
-// 1. Точка збірки: створюємо сховище
-ICatalogStore store = StoreFactory.Create(args, dataPath);
+// --- 1. ДЕМОНСТРАЦІЯ ВІДКЛАДЕНОГО ВИКОНАННЯ ---
+Console.WriteLine("--- Демо відкладеного виконання ---");
+var query = items.Where(p => p.Quantity < 10); // Запит побудовано, але не виконано
+Console.WriteLine($"Дефіцитних до змін: {query.Count()}");
 
-// --- ДОДАТКОВЕ ЗАВДАННЯ: Створюємо Sinks для ручного DI ---
-var sinks = new INotificationSink[] 
+// Змінюємо джерело даних
+items.Add(Product.Create("tmp00001", "SKU-999", "Новий Дефіцит", "шт", 3));
+Console.WriteLine($"Дефіцитних після змін: {query.Count()}"); // Число зміниться, бо Count() запускає запит наново
+
+var snapshot = query.ToList(); // Фіксуємо результат у пам'яті
+items.Clear();
+Console.WriteLine($"У знімку лишилось: {snapshot.Count}\n"); // Не зміниться, бо читаємо властивість Count зі списку
+
+items = SampleData.GetProducts().ToList();
+
+
+// --- 2. ПІДКОМАНДИ LINQ-ЗВІТІВ ---
+// (Якщо аргумент не передано, беремо "report-top")
+var command = args.FirstOrDefault(a => !a.StartsWith("--")) ?? "report-top";
+
+Console.WriteLine($"--- Виконання команди: {command} ---");
+switch (command)
 {
-    new ConsoleSink(),
-    new FileSink(logPath)
-};
-
-// 2. Передаємо і сховище, і "сінки" у сервіс
-var service = new CatalogService(store, sinks);
-
-// --- БАЗОВЕ ЗАВДАННЯ: Підписка через події (Event) ---
-void OnCatalogChanged(object? sender, CatalogChangedEventArgs e)
-{
-    var line = $"[Event] {e.At:HH:mm:ss} {e.Kind,-8} {e.Id} {e.Delta,4:+0;-0} -> залишок {e.QuantityAfter}";
-    Console.WriteLine(line);
+    case "report-top":
+        Print(ReportService.TopByQuantity(items, 5)); 
+        break;
+    case "report-low": 
+        Print(ReportService.LowStock(items, 10)); 
+        break;
+    case "report-groups":
+        foreach (var g in ReportService.ByUnit(items))
+            Console.WriteLine($" {g.Key,-6} позицій: {g.Count,3} сумарно: {g.TotalQuantity,6}");
+        break;
+    case "report-sum":
+        var t = ReportService.Totals(items);
+        Console.WriteLine($" позицій {t.Items}, всього {t.Total}, середнє {t.Average:F2}, макс {t.Max}");
+        break;
+    default: 
+        Console.WriteLine("Доступні: report-top | report-low | report-groups | report-sum"); 
+        break;
 }
-service.Changed += OnCatalogChanged;
 
-int changes = 0;
-service.Changed += (sender, e) => changes++;
+// --- 3. ДОДАТКОВЕ ЗАВДАННЯ 4: Вимірювання часу (Stopwatch) ---
+Console.WriteLine("\n--- Додаткове завдання 4 (Вимірювання Stopwatch) ---");
 
+int recordCount = 100_000;
+Console.WriteLine($"[1] Генеруємо {recordCount:N0} фейкових записів у пам'яті...");
 
-// ================= СЦЕНАРІЇ =================
+var largeData = Enumerable.Range(1, recordCount)
+    .Select(i => Product.Create(Guid.NewGuid().ToString("N")[..8], $"SKU-{i}", $"Назва {i}", "шт", i % 100))
+    .ToList();
 
-Console.WriteLine("--- Сценарій успішних операцій ---");
-var created = service.Add("SKU-101", "Кабель UTP cat6", "м", 50);
-service.Receive(created.Id, 25);
+Console.WriteLine($"    Згенеровано успішно. Починаємо фільтрацію та сортування...\n");
 
-Console.WriteLine($"\nПодій отримано через Event (лямбда): {changes}");
+var sw = Stopwatch.StartNew();
+// Варіант 1: Без проміжного ToList() (виконується швидше, менше пам'яті)
+var count1 = largeData.Where(p => p.Quantity > 50).OrderBy(p => p.Sku).Count();
+sw.Stop();
+Console.WriteLine($"[Варіант 1] БЕЗ ToList() посередині:");
+Console.WriteLine($"    Знайдено {count1:N0} товарів. Час виконання: {sw.ElapsedMilliseconds} мс\n");
 
-// Демонструємо, що при відписці Event мовчить, але Sinks продовжують працювати
-Console.WriteLine("\n--- Демонстрація відписки Event ---");
-service.Changed -= OnCatalogChanged;
-service.Receive(created.Id, 5); 
+sw.Restart();
+// Варіант 2: З проміжним ToList() (виділяє пам'ять під новий список, працює повільніше)
+var count2 = largeData.Where(p => p.Quantity > 50).ToList().OrderBy(p => p.Sku).Count();
+sw.Stop();
+Console.WriteLine($"[Варіант 2] З проміжним ToList():");
+Console.WriteLine($"    Знайдено {count2:N0} товарів. Час виконання: {sw.ElapsedMilliseconds} мс");
 
-Console.WriteLine($"\nПодій отримано через Event (лямбда): {changes}");
-
-Console.WriteLine("\n--- Сценарії відмови (Подій не повинно бути) ---");
-TryDo("Прихід для неіснуючого id", () => service.Receive("NON-EXISTENT-ID", 10));
 
 return 0;
 
-static void TryDo(string title, Action action)
+static void Print(IReadOnlyList<StockLine> lines)
 {
-    try
-    {
-        action();
-        Console.WriteLine($"  [!] {title}: виняток НЕ спрацював!");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"  [OK] {title}: {ex.GetType().Name} — {ex.Message}");
-    }
+    foreach (var l in lines)
+        Console.WriteLine($" {l.Sku,-10} {l.Name,-22} {l.Quantity,6} {l.Unit}");
 }
