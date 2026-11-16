@@ -44,7 +44,12 @@ public sealed class Product
             unit.Trim(),
             quantity);
     }
-
+    public static Product FromDto(Core.Import.ProductDto dto) 
+{
+    if (string.IsNullOrWhiteSpace(dto.Sku)) throw new System.ArgumentException("SKU не може бути порожнім");
+    
+    return Create(dto.Id, dto.Sku, dto.Name, dto.Unit, dto.Quantity);
+}
     // Операція бізнес-логіки: надходження товару на склад
     public void RegisterArrival(int amount)
     {

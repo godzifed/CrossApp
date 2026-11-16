@@ -1,88 +1,72 @@
-﻿using System.Diagnostics;
-using Core.Domain;
-using Core.Reports;
+﻿using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Core;
+using Core.Import;
+using Core.Services;
+using Core.Storage;
 
 Console.WriteLine("============================================================");
-Console.WriteLine("                ЛАБОРАТОРНА РОБОТА №7                       ");
+Console.WriteLine("                ЛАБОРАТОРНА РОБОТА №8                       ");
 Console.WriteLine("============================================================\n");
 
-// Отримуємо розширений набір даних
-var items = SampleData.GetProducts().ToList();
+// 1. Ініціалізація сховища та сервісу
+var store = new InMemoryCatalogStore(); 
+var service = new CatalogService(store, Array.Empty<Core.Abstractions.INotificationSink>());
 
-// --- 1. ДЕМОНСТРАЦІЯ ВІДКЛАДЕНОГО ВИКОНАННЯ ---
-Console.WriteLine("--- Демо відкладеного виконання ---");
-var query = items.Where(p => p.Quantity < 10); // Запит побудовано, але не виконано
-Console.WriteLine($"Дефіцитних до змін: {query.Count()}");
+// 2. Налаштування токенів скасування
+using var userCts = new CancellationTokenSource();
+Console.CancelKeyPress += (_, e) => 
+{ 
+    e.Cancel = true; 
+    Console.WriteLine("\nОтримано сигнал скасування (Ctrl+C)...");
+    userCts.Cancel(); 
+};
 
-// Змінюємо джерело даних
-items.Add(Product.Create("tmp00001", "SKU-999", "Новий Дефіцит", "шт", 3));
-Console.WriteLine($"Дефіцитних після змін: {query.Count()}"); // Число зміниться, бо Count() запускає запит наново
+// Токен для таймауту (скасує операцію автоматично через 5 секунд)
+using var timeoutCts = new CancellationTokenSource();
+timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
 
-var snapshot = query.ToList(); // Фіксуємо результат у пам'яті
-items.Clear();
-Console.WriteLine($"У знімку лишилось: {snapshot.Count}\n"); // Не зміниться, бо читаємо властивість Count зі списку
+// Додаткове завдання 2: Зв'язані токени скасування (об'єднуємо Ctrl+C та таймаут)
+using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(userCts.Token, timeoutCts.Token);
 
-items = SampleData.GetProducts().ToList();
+// 3. Шлях до файлу імпорту
+// Вказуємо шлях до JSON файлу. Зверніть увагу, папка data має бути поруч із виконуваним файлом
+string importPath = Path.Combine(Environment.CurrentDirectory, "Data", "sample.json");
 
-
-// --- 2. ПІДКОМАНДИ LINQ-ЗВІТІВ ---
-// (Якщо аргумент не передано, беремо "report-top")
-var command = args.FirstOrDefault(a => !a.StartsWith("--")) ?? "report-top";
-
-Console.WriteLine($"--- Виконання команди: {command} ---");
-switch (command)
+// Додаткове завдання 3: Обробник прогресу
+var progress = new Progress<int>(count => 
 {
-    case "report-top":
-        Print(ReportService.TopByQuantity(items, 5)); 
-        break;
-    case "report-low": 
-        Print(ReportService.LowStock(items, 10)); 
-        break;
-    case "report-groups":
-        foreach (var g in ReportService.ByUnit(items))
-            Console.WriteLine($" {g.Key,-6} позицій: {g.Count,3} сумарно: {g.TotalQuantity,6}");
-        break;
-    case "report-sum":
-        var t = ReportService.Totals(items);
-        Console.WriteLine($" позицій {t.Items}, всього {t.Total}, середнє {t.Average:F2}, макс {t.Max}");
-        break;
-    default: 
-        Console.WriteLine("Доступні: report-top | report-low | report-groups | report-sum"); 
-        break;
+    Console.Write($"\rІмпортовано записів: {count}...");
+});
+
+// 4. Виконання асинхронного імпорту з обробкою винятків
+try
+{
+    var added = await service.ImportAsync(new JsonCatalogImporter(), importPath, progress, linkedCts.Token);
+    Console.WriteLine($"\nУспішно завершено. Всього імпортовано: {added}");
+}
+catch (OperationCanceledException) 
+{ 
+    // Обробка скасування має йти ПЕРЕД Exception
+    Console.WriteLine("\nІмпорт скасовано (через Ctrl+C або таймаут)."); 
+}
+catch (DomainException ex) 
+{ 
+    // Бізнес-помилки
+    Console.WriteLine($"\nДані відхилено: {ex.Message}"); 
+}
+catch (FileNotFoundException) 
+{ 
+    // Якщо файл не знайдено
+    Console.WriteLine($"\nФайл не знайдено: {importPath}"); 
+}
+catch (Exception ex)
+{
+    // Будь-які інші неочікувані помилки
+    Console.WriteLine($"\nНеочікувана помилка: {ex.Message}");
 }
 
-// --- 3. ДОДАТКОВЕ ЗАВДАННЯ 4: Вимірювання часу (Stopwatch) ---
-Console.WriteLine("\n--- Додаткове завдання 4 (Вимірювання Stopwatch) ---");
-
-int recordCount = 100_000;
-Console.WriteLine($"[1] Генеруємо {recordCount:N0} фейкових записів у пам'яті...");
-
-var largeData = Enumerable.Range(1, recordCount)
-    .Select(i => Product.Create(Guid.NewGuid().ToString("N")[..8], $"SKU-{i}", $"Назва {i}", "шт", i % 100))
-    .ToList();
-
-Console.WriteLine($"    Згенеровано успішно. Починаємо фільтрацію та сортування...\n");
-
-var sw = Stopwatch.StartNew();
-// Варіант 1: Без проміжного ToList() (виконується швидше, менше пам'яті)
-var count1 = largeData.Where(p => p.Quantity > 50).OrderBy(p => p.Sku).Count();
-sw.Stop();
-Console.WriteLine($"[Варіант 1] БЕЗ ToList() посередині:");
-Console.WriteLine($"    Знайдено {count1:N0} товарів. Час виконання: {sw.ElapsedMilliseconds} мс\n");
-
-sw.Restart();
-// Варіант 2: З проміжним ToList() (виділяє пам'ять під новий список, працює повільніше)
-var count2 = largeData.Where(p => p.Quantity > 50).ToList().OrderBy(p => p.Sku).Count();
-sw.Stop();
-Console.WriteLine($"[Варіант 2] З проміжним ToList():");
-Console.WriteLine($"    Знайдено {count2:N0} товарів. Час виконання: {sw.ElapsedMilliseconds} мс");
-
-
+// Завершення роботи програми
 return 0;
-
-static void Print(IReadOnlyList<StockLine> lines)
-{
-    foreach (var l in lines)
-        Console.WriteLine($" {l.Sku,-10} {l.Name,-22} {l.Quantity,6} {l.Unit}");
-}

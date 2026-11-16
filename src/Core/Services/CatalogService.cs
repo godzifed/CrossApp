@@ -89,4 +89,31 @@ public sealed class CatalogService
     {
         return _store.List();
     }
+
+    // Метод імпорту з підтримкою скасування та звітування про прогрес
+    public async Task<int> ImportAsync(
+        ICatalogImporter importer, 
+        string path, 
+        IProgress<int>? progress = null,
+        CancellationToken ct = default)
+    {
+        var added = 0;
+        
+        // Додаткове завдання 1: await foreach для потокового читання
+        await foreach (var item in importer.LoadAsync(path, ct))
+        {
+            ct.ThrowIfCancellationRequested(); // Перевірка скасування
+
+            if (_store.GetById(item.Id) is not null) continue; // Ідемпотентність
+
+            _store.Add(item);
+            OnChanged(item, CatalogChangeKind.Added, item.Quantity); // Підняття події
+            added++;
+            
+            // Звітування про прогрес (Додаткове завдання 3)
+            progress?.Report(added);
+        }
+
+        return added;
+    }
 }

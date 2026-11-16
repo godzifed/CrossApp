@@ -36,6 +36,29 @@ group p by p.Unit into g
 orderby g.Sum(x => x.Quantity) descending
 select new GroupSummary(g.Key, g.Count(), g.Sum(x => x.Quantity));
 
+## Лабораторна робота №8: Асинхронний імпорт, скасування та доменні винятки
+
+## 1. Які операції стали асинхронними і чому саме вони (а які лишились синхронними)
+*   **Стали асинхронними:**
+    *   **Читання файлу з диска** (`FileStream(useAsync: true)` та `JsonSerializer.DeserializeAsync`). Це операції введення-виведення (I/O), які можуть тривати довго. Асинхронність дозволяє звільнити потік, поки система чекає на відповідь від диска.
+    *   **Імпорт та обробка даних у сервісі** (`CatalogService.ImportAsync`). Оскільки він викликає асинхронний імпортер, весь ланцюжок до точки входу (`Program.cs`) також має стати асинхронним (принцип "асинхронність на всіх рівнях").
+*   **Залишились синхронними:**
+    *   **Робота зі сховищем в пам'яті** (`_store.Add`, `_store.GetById`). Це прості операції з колекціями в оперативній пам'яті (CPU-bound), вони виконуються миттєво і не блокують потоки I/O.
+    *   **Підняття подій** (`OnChanged`).
+    *   **Генерація звітів** (`ReportService`). Це чисті функції, які швидко обробляють наявні дані в пам'яті.
+
+## 2. Фрагменти коду
+
+**Фрагмент LoadAsync:** 
+```csharp
+public async IAsyncEnumerable<Product> LoadAsync(string path, [EnumeratorCancellation] CancellationToken ct = default)
+{
+    ct.ThrowIfCancellationRequested();
+    await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+    
+    // ...
+
+
 
 ## Структура Solution
 Проєкт розділено на окрему бібліотеку логіки та точку входу:
