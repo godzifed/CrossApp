@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Core.Domain;
 
 namespace Core.Reports;
@@ -45,7 +42,7 @@ public static class ReportService
     }
 
     // 5) ДОДАТКОВЕ ЗАВДАННЯ 1: Join двох колекцій
-    // З'єднуємо товари з їхніми "рухами" (фейковими для демо)
+    // З'єднуємо товари з їхніми "рухами" 
     public static IReadOnlyList<MovementLine> GetMovements(IEnumerable<Product> products, IEnumerable<StockMovement> movements)
     {
         return products.Join(movements,

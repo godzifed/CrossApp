@@ -1,7 +1,4 @@
-﻿using System;
-using System.Linq;
-using System.Diagnostics;
-using System.Collections.Generic;
+﻿using System.Diagnostics;
 using Core.Domain;
 using Core.Reports;
 using Core;
