@@ -68,6 +68,42 @@ public async IAsyncEnumerable<Product> LoadAsync(string path, [EnumeratorCancell
 
 Такий підхід є правильною інженерною практикою. Мета модульних тестів — перевірити поведінку (Behavior), інваріанти та скасування, а не досягти "100% покриття" заради галочки.
 
+
+## Лабораторна робота №9: Шляхи, JSON, конфігурація та Secrets
+
+### 1. Профілі середовищ (Development і Production)
+Конфігурація формується послідовно: `appsettings.json` → `appsettings.{Environment}.json` → `user-secrets` → змінні середовища (`CROSSAPP_*`) → аргументи командного рядка.
+
+| Профіль | Файл налаштувань | `Logging:MinimumLevel` | Розташування даних за замовчуванням |
+| :--- | :--- | :--- | :--- |
+| **Production** | `appsettings.json` | `Warning` | `<AppContext.BaseDirectory>/data/items.json` |
+| **Development** | `appsettings.Development.json` | `Debug` | `<AppContext.BaseDirectory>/data/items.json` |
+
+### 2. Таблиця ключів конфігурації
+
+| Ключ | Призначення | Значення за замовчуванням | Змінна середовища |
+| :--- | :--- | :--- | :--- |
+| `EnvironmentName` | Назва поточного профілю | `Development` (у dev) / `Production` | `CROSSAPP_EnvironmentName` |
+| `Logging:MinimumLevel` | Мінімальний рівень логування | `Debug` (у dev) / `Warning` | `CROSSAPP_Logging__MinimumLevel` |
+| `Storage:DataPath` | Каталог збереження даних | `data` | `CROSSAPP_Storage__DataPath` або `CROSSAPP_DATA_PATH` |
+| `Storage:FileName` | Ім'я JSON-файлу сховища | `items.json` | `CROSSAPP_Storage__FileName` |
+| `Warehouse:DefaultUnit` | Одиниця виміру за замовчуванням | `шт` | `CROSSAPP_Warehouse__DefaultUnit` |
+| `Integration:ApiKey` | Навчальний секрет (не зберігається в Git) | *(із `user-secrets`)* | `CROSSAPP_Integration__ApiKey` |
+
+### 3. Побудова кросплатформних шляхів (`Path.Combine`)
+Фрагмент із `src/Core/Configuration/AppOptions.cs`:
+```csharp
+public string ResolveFullPath(string baseDir)
+{
+    var root = Path.IsPathRooted(DataPath)
+        ? DataPath
+        : Path.Combine(baseDir, DataPath);
+
+    Directory.CreateDirectory(root);
+    return Path.GetFullPath(Path.Combine(root, FileName));
+}
+
+
 ## Структура Solution
 Проєкт розділено на окрему бібліотеку логіки та точку входу:
 - src/Core (classlib): Бібліотека класів, що не має точки входу та компілюється в `.dll`. Містить збір інформації про середовище (`EnvironmentInfo`, `EnvironmentReport`). Підтримує multi-targeting (`net8.0;net10.0`).
