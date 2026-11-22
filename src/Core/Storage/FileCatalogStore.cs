@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Core.Abstractions;
 using Core.Domain;
@@ -7,7 +8,13 @@ namespace Core.Storage;
 
 public sealed class FileCatalogStore(string path) : ICatalogStore
 {
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     private readonly Dictionary<string, Product> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly string _path = Path.GetFullPath(path);
     private bool _loaded;
@@ -16,26 +23,49 @@ public sealed class FileCatalogStore(string path) : ICatalogStore
     {
         if (_loaded) return;
 
-        if (File.Exists(_path))
+        if (!File.Exists(_path))
+        {
+            _loaded = true;
+            return;
+        }
+
+        try
         {
             var json = File.ReadAllText(_path);
-            var dtos = JsonSerializer.Deserialize<List<ProductDto>>(json) ?? [];
+            var dtos = JsonSerializer.Deserialize<List<ProductDto>>(json, Options) ?? [];
 
+            _cache.Clear();
             foreach (var dto in dtos)
             {
                 var p = Product.FromDto(dto);
                 _cache[p.Id] = p;
             }
-        }
 
-        _loaded = true;
+            _loaded = true;
+        }
+        catch (JsonException ex)
+        {
+            throw new DomainException($"Пошкоджений JSON-файл ({Path.GetFileName(_path)}): {ex.Message}", ex);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new DomainException($"Некоректні дані у файлі ({Path.GetFileName(_path)}): {ex.Message}", ex);
+        }
     }
 
     private void Flush()
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+        var dir = Path.GetDirectoryName(_path);
+        if (!string.IsNullOrWhiteSpace(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
         var dtos = _cache.Values.Select(p => p.ToDto()).ToList();
-        File.WriteAllText(_path, JsonSerializer.Serialize(dtos, Options));
+        var tmp = _path + ".tmp";
+
+        File.WriteAllText(tmp, JsonSerializer.Serialize(dtos, Options));
+        File.Move(tmp, _path, overwrite: true);
     }
 
     public IReadOnlyList<Product> List()
@@ -72,11 +102,12 @@ public sealed class FileCatalogStore(string path) : ICatalogStore
     }
 
     public IReadOnlyList<Product> Find(Func<Product, bool> predicate)
-{
-    ArgumentNullException.ThrowIfNull(predicate);
-    EnsureLoaded();
-    return _cache.Values.Where(predicate).ToList();
-}
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        EnsureLoaded();
+        return _cache.Values.Where(predicate).ToList();
+    }
+
     public bool Remove(string id)
     {
         EnsureLoaded();

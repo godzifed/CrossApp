@@ -1,76 +1,83 @@
-﻿using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Reflection;
 using Core;
-using Core.Import;
-using Core.Services;
+using Core.Configuration;
+using Core.Domain;
 using Core.Storage;
+using Microsoft.Extensions.Configuration;
 
-Console.WriteLine("============================================================");
-Console.WriteLine("                ЛАБОРАТОРНА РОБОТА №8                       ");
-Console.WriteLine("============================================================\n");
+var envName = Environment.GetEnvironmentVariable("CROSSAPP_ENVIRONMENT") ?? "Development";
 
-// 1. Ініціалізація сховища та сервісу
-var store = new InMemoryCatalogStore(); 
-var service = new CatalogService(store, Array.Empty<Core.Abstractions.INotificationSink>());
+var config = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+    .AddJsonFile($"appsettings.{envName}.json", optional: true)
+    .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
+    .AddEnvironmentVariables(prefix: "CROSSAPP_")
+    .AddCommandLine(args)
+    .Build();
 
-// 2. Налаштування токенів скасування
-using var userCts = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) => 
-{ 
-    e.Cancel = true; 
-    Console.WriteLine("\nОтримано сигнал скасування (Ctrl+C)...");
-    userCts.Cancel(); 
+var options = config.Get<AppOptions>() ?? new AppOptions();
+var legacyPath = Environment.GetEnvironmentVariable("CROSSAPP_DATA_PATH");
+
+var storageOptions = new StorageOptions
+{
+    DataPath = string.IsNullOrWhiteSpace(legacyPath) ? options.Storage.DataPath : legacyPath,
+    FileName = options.Storage.FileName
 };
 
-// Токен для таймауту (скасує операцію автоматично через 5 секунд)
-using var timeoutCts = new CancellationTokenSource();
-timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
+var dataFilePath = storageOptions.ResolveFullPath(AppContext.BaseDirectory);
+var apiKey = config["Integration:ApiKey"];
 
-// Додаткове завдання 2: Зв'язані токени скасування (об'єднуємо Ctrl+C та таймаут)
-using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(userCts.Token, timeoutCts.Token);
+Console.WriteLine($"Середовище: {options.EnvironmentName} (Log: {options.Logging.MinimumLevel})");
+Console.WriteLine($"Файл даних: {dataFilePath}");
+Console.WriteLine($"Одиниця виміру за замовчуванням: {options.Warehouse.DefaultUnit}");
+Console.WriteLine(apiKey is null
+    ? "ApiKey: не заданий"
+    : $"ApiKey: присутній, довжина {apiKey.Length}");
 
-// 3. Шлях до файлу імпорту
-// Вказуємо шлях до JSON файлу. Зверніть увагу, папка data має бути поруч із виконуваним файлом
-string importPath = Path.Combine(Environment.CurrentDirectory, "Data", "sample.json");
+    var store = new FileCatalogStore(dataFilePath);
+var command = args.FirstOrDefault(a => !a.StartsWith("--"))?.ToLowerInvariant() ?? "export";
 
-// Додаткове завдання 3: Обробник прогресу
-var progress = new Progress<int>(count => 
-{
-    Console.Write($"\rІмпортовано записів: {count}...");
-});
-
-
-// 4. Виконання асинхронного імпорту з обробкою винятків
 try
 {
-    var added = await service.ImportAsync(new JsonCatalogImporter(), importPath, progress, linkedCts.Token);
+    switch (command)
+    {
+        case "export":
+            var defaultUnit = options.Warehouse.DefaultUnit;
+            var itemsToExport = new[]
+            {
+                Product.Create("a1b2c3d4", "A-100", "Цемент М400", "мішок", 40),
+                Product.Create("b2c3d4e5", "B-200", "Гвинт М6", defaultUnit, 150),
+                Product.Create("c3d4e5f6", "C-300", "Кабель ВВГ 3x2.5", "м", 85)
+            };
 
-    await Task.Delay(50);
+            foreach (var item in itemsToExport)
+            {
+                store.Update(item); // записує або оновлює товар і атомарно зберігає JSON
+            }
 
-    Console.WriteLine($"\nУспішно завершено. Всього імпортовано: {added}");
+            Console.WriteLine($"Експортовано {itemsToExport.Length} записи.");
+            break;
+
+        case "import":
+            var loaded = store.List();
+            Console.WriteLine($"Завантажено {loaded.Count} записів із JSON:");
+            foreach (var item in loaded)
+            {
+                Console.WriteLine($" - [{item.Sku}] {item.Name}: {item.Quantity} {item.Unit}");
+            }
+            break;
+
+        default:
+            Console.WriteLine($"Невідома команда '{command}'. Доступні команди: export, import");
+            break;
+    }
 }
-catch (OperationCanceledException) 
-{ 
-    // Обробка скасування має йти ПЕРЕД Exception
-    Console.WriteLine("\nІмпорт скасовано (через Ctrl+C або таймаут)."); 
-}
-catch (DomainException ex) 
-{ 
-    // Бізнес-помилки
-    Console.WriteLine($"\nДані відхилено: {ex.Message}"); 
-}
-catch (FileNotFoundException) 
-{ 
-    // Якщо файл не знайдено
-    Console.WriteLine($"\nФайл не знайдено: {importPath}"); 
-}
-catch (Exception ex)
+catch (DomainException ex)
 {
-    // Будь-які інші неочікувані помилки
-    Console.WriteLine($"\nНеочікувана помилка: {ex.Message}");
+    Console.WriteLine($"Помилка даних: {ex.Message}");
 }
-
-// Завершення роботи програми
-return 0;
+catch (IOException ex)
+{
+    Console.WriteLine($"Помилка файлової системи: {ex.Message}");
+}
