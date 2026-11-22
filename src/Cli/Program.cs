@@ -41,10 +41,14 @@ var progress = new Progress<int>(count =>
     Console.Write($"\rІмпортовано записів: {count}...");
 });
 
+
 // 4. Виконання асинхронного імпорту з обробкою винятків
 try
 {
     var added = await service.ImportAsync(new JsonCatalogImporter(), importPath, progress, linkedCts.Token);
+
+    await Task.Delay(50);
+
     Console.WriteLine($"\nУспішно завершено. Всього імпортовано: {added}");
 }
 catch (OperationCanceledException) 
