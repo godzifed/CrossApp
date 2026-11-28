@@ -1,0 +1,67 @@
+@baseUrl = http://localhost:5080
+
+### 1. Health check
+GET {{baseUrl}}/health
+
+### 2. Створити товар (201 Created)
+# @name createProduct
+POST {{baseUrl}}/api/products
+Content-Type: application/json
+
+{
+  "sku": "A-100",
+  "name": "Цемент М400",
+  "unit": "мішок",
+  "quantity": 40
+}
+
+###
+@createdId = {{createProduct.response.body.id}}
+
+### 3. Дублікат SKU -> DomainException (409 Conflict)
+POST {{baseUrl}}/api/products
+Content-Type: application/json
+
+{
+  "sku": "A-100",
+  "name": "Цемент дублікат",
+  "unit": "мішок",
+  "quantity": 10
+}
+
+### 4. Список із пагінацією та пошуком (200 OK -> { items, total })
+GET {{baseUrl}}/api/products?page=1&pageSize=20&search=Цемент
+
+### 5. Отримати товар за id (200 OK)
+GET {{baseUrl}}/api/products/{{createdId}}
+
+### 6. Оновити товар (200 OK)
+PUT {{baseUrl}}/api/products/{{createdId}}
+Content-Type: application/json
+
+{
+  "sku": "A-100",
+  "name": "Цемент М500",
+  "unit": "мішок",
+  "quantity": 3
+}
+
+### 7. Низький залишок (200 OK)
+GET {{baseUrl}}/api/products/low-stock?threshold=5
+
+### 8. Некоректні дані -> FluentValidation (400 Bad Request)
+POST {{baseUrl}}/api/products
+Content-Type: application/json
+
+{
+  "sku": "",
+  "name": "X",
+  "unit": "",
+  "quantity": -1
+}
+
+### 9. Видалити товар (204 No Content)
+DELETE {{baseUrl}}/api/products/{{createdId}}
+
+### 10. Перевірка після видалення (404 Not Found)
+GET {{baseUrl}}/api/products/{{createdId}}

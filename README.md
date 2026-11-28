@@ -134,3 +134,13 @@ dotnet run --project src/Cli
 | win-x64 | self-contained | `PublishSingleFile=true` | 70 МБ (1 файл) | ні |
 | win-x64 | self-contained | `PublishTrimmed=true` | 19 МБ | ні |
 |
+
+
+
+## Лабораторна робота №10: Minimal API (CRUD, валідація, OpenAPI / Scalar)
+
+### Запуск API
+Зафіксований порт (також прописаний у `src/Api/Properties/launchSettings.json`): **`http://localhost:5080`**
+
+```bash
+dotnet run --project src/Api --urls http://localhost:5080
